@@ -355,7 +355,7 @@ startBtn.onclick=()=>running?stop():start();
 async function start(){
   msg('');
   if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
-    msg('This phone's WebView can't reach the microphone. Update Android System WebView from the Play Store and try again.');return}
+    msg("This phone's WebView can't reach the microphone. Update Android System WebView from the Play Store and try again.");return}
   try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}
   catch(e){msg('Microphone access was blocked. Allow the microphone for Ring Out EQ in Android Settings › Apps › Ring Out EQ › Permissions, then tap Start mic again.');return}
   ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
