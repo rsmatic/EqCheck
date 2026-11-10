@@ -2,9 +2,12 @@ package com.ringout.eq;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.view.View;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -19,6 +22,7 @@ public class MainActivity extends Activity {
     private static final int REQ_MIC = 1;
     private WebView web;
     private PermissionRequest pendingRequest;
+    private boolean landscape;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,6 +49,19 @@ public class MainActivity extends Activity {
             }
         });
 
+        // Lets the page switch to a full-screen landscape spectrum view.
+        web.addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void setLandscape(final boolean on) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        applyLandscape(on);
+                    }
+                });
+            }
+        }, "Android");
+
         setContentView(web);
 
         if (savedInstanceState != null) {
@@ -57,6 +74,30 @@ public class MainActivity extends Activity {
         if (!hasMic()) {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC);
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void applyLandscape(boolean on) {
+        landscape = on;
+        setRequestedOrientation(on ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                   : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        getWindow().getDecorView().setSystemUiVisibility(on
+                ? View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN
+                  | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                  | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                : 0);
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        if (landscape && web != null) {
+            // Back leaves the landscape spectrum view instead of closing the app.
+            web.evaluateJavascript("window.exitSpecFull&&exitSpecFull()", null);
+            applyLandscape(false);
+            return;
+        }
+        super.onBackPressed();
     }
 
     private boolean hasMic() {

@@ -69,6 +69,14 @@ input[type=range].h{flex:1 1 140px;accent-color:var(--accent);min-width:120px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
 ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:15px}
 .note{color:var(--dim);font-size:14px;margin:0}
+/* Full-screen landscape spectrum: only the header and the spectrum panel stay, the canvas fills the rest */
+body.specfull{height:100vh;overflow:hidden;padding-block:6px}
+body.specfull .wrap{height:100%;max-width:none;gap:6px}
+body.specfull .wrap>:not(header):not(#specPanel){display:none}
+body.specfull header button{min-height:36px;padding:5px 12px}
+body.specfull h1{font-size:20px}
+body.specfull #specPanel{flex:1 1 auto;min-height:0;padding:8px 10px;gap:6px}
+body.specfull canvas{flex:1 1 auto;height:auto;min-height:0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -81,10 +89,11 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-si
   <button id="monBtn" class="toggle" aria-pressed="false">Monitor out</button>
 </header>
 
-<div class="panel">
+<div class="panel" id="specPanel">
   <div class="row">
     <h2 style="flex:1 1 auto">Live spectrum</h2>
     <span class="mono" id="peakTxt">Mic off</span>
+    <button id="fullBtn" class="small toggle" aria-pressed="false">Landscape</button>
   </div>
   <canvas id="spec" aria-label="Live frequency spectrum with EQ curve"></canvas>
   <div class="row">
@@ -391,6 +400,21 @@ function loop(){
   detect();draw();
   requestAnimationFrame(loop);
 }
+/* ---------- full-screen landscape spectrum ---------- */
+const fullBtn=$('fullBtn');
+function setSpecFull(on){
+  document.body.classList.toggle('specfull',on);
+  fullBtn.textContent=on?'Exit':'Landscape';fullBtn.setAttribute('aria-pressed',on);
+  if(window.Android&&Android.setLandscape){Android.setLandscape(on)}   // app: rotate + hide system bars
+  else if(on){                                                           // plain browser fallback
+    const d=document.documentElement;
+    Promise.resolve(d.requestFullscreen&&d.requestFullscreen()).then(()=>screen.orientation&&screen.orientation.lock&&screen.orientation.lock('landscape')).catch(()=>{});
+  }else if(document.fullscreenElement){document.exitFullscreen().catch(()=>{})}
+  if(on)window.scrollTo(0,0);
+}
+fullBtn.onclick=()=>setSpecFull(!document.body.classList.contains('specfull'));
+window.exitSpecFull=()=>setSpecFull(false);   // called by the Android back button
+
 document.addEventListener('visibilitychange',async()=>{if(running&&document.visibilityState==='visible'){try{wake=await navigator.wakeLock.request('screen')}catch(e){}}});
 
 renderAlerts();renderNotches();
