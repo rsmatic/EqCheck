@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12161d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Ring Out EQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one-column stage console — live spectrum on top, feedback alerts, then a 31-band fader strip that scrolls sideways */
+:root{
+  --bg:#12161d; --panel:#1a2029; --raise:#222a35; --line:#2c3644;
+  --fg:#e2e8ef; --dim:#8a97a6;
+  --accent:#f2a93b; --hot:#ff5a4e; --ok:#4fd1a5;
+  --display:"Barlow Condensed","Roboto Condensed","sans-serif-condensed","Arial Narrow",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--bg);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 var(--display);letter-spacing:.01em;
+  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));padding-block:12px 32px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+h1{font-size:24px;font-weight:700;margin:0;text-transform:uppercase;letter-spacing:.06em;flex:1 1 auto}
+h1 span{color:var(--accent)}
+h2{font-size:13px;font-weight:600;margin:0;text-transform:uppercase;letter-spacing:.12em;color:var(--dim)}
+button,select{font:600 15px var(--display);letter-spacing:.04em;color:var(--fg);background:var(--raise);
+  border:1px solid var(--line);border-radius:6px;padding:9px 14px;min-height:42px;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:#1a1205;border-color:var(--accent);text-transform:uppercase}
+button.primary.on{background:var(--hot);border-color:var(--hot);color:#fff}
+button.toggle[aria-pressed="true"]{background:#3a2c12;border-color:var(--accent);color:var(--accent)}
+button.small{min-height:34px;padding:5px 10px;font-size:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.meter{flex:1 1 140px;height:10px;background:var(--raise);border-radius:5px;overflow:hidden;min-width:100px}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ok) 0 70%,var(--accent) 70% 88%,var(--hot) 88%)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px}
+canvas{display:block;width:100%;height:230px;border-radius:6px;background:#0d1015;touch-action:pan-y}
+#msg{font-size:15px;color:var(--accent)}
+#msg:empty{display:none}
+.alerts{display:flex;flex-direction:column;gap:6px}
+.alert{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#2a1618;border:1px solid #5a2a2a;border-left:4px solid var(--hot);border-radius:6px;padding:8px 10px}
+.alert b{font:600 20px var(--mono);color:var(--hot);min-width:96px}
+.alert .meta{flex:1 1 120px;color:var(--dim);font-size:14px}
+.empty{color:var(--dim);font-size:15px}
+.notches{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:6px;background:var(--raise);border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 12px;font:13px var(--mono)}
+.chip button{min-height:28px;padding:0 9px;border-radius:999px;font-size:15px}
+.stripwrap{overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:6px}
+.strip{display:flex;gap:2px;width:max-content}
+.band{display:flex;flex-direction:column;align-items:center;gap:4px;width:36px;padding:4px 0;border-radius:6px}
+.band.warn{background:#3a1c1c}
+.band output{font:11px var(--mono);color:var(--dim);background:none;border:0;min-height:0;padding:2px 0;width:100%;text-align:center;cursor:pointer}
+.band output.cut{color:var(--hot)} .band output.boost{color:var(--accent)}
+.fader{writing-mode:vertical-lr;direction:rtl;width:30px;height:200px;margin:0;accent-color:var(--accent);cursor:pointer}
+.hz{font:600 12px var(--display);color:var(--fg)}
+.band.warn .hz{color:var(--hot)}
+label.ctl{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--dim)}
+input[type=range].h{flex:1 1 140px;accent-color:var(--accent);min-width:120px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:15px}
+.note{color:var(--dim);font-size:14px;margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Ring Out <span>EQ</span></h1>
+  <button id="startBtn" class="primary">Start mic</button>
+  <button id="monBtn" class="toggle" aria-pressed="false">Monitor out</button>
+</header>
+
+<div class="panel">
+  <div class="row">
+    <h2 style="flex:1 1 auto">Live spectrum</h2>
+    <span class="mono" id="peakTxt">Mic off</span>
+  </div>
+  <canvas id="spec" aria-label="Live frequency spectrum with EQ curve"></canvas>
+  <div class="row">
+    <span class="note" style="flex:0 0 auto">Level</span>
+    <div class="meter"><i id="meter"></i></div>
+    <span class="mono" id="lvlTxt">-∞ dB</span>
+  </div>
+  <div id="msg" role="status"></div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <div class="row">
+      <h2 style="flex:1 1 auto">Feedback detected</h2>
+      <button id="autoBtn" class="toggle small" aria-pressed="false">Auto-notch</button>
+      <button id="clrAlerts" class="small">Clear</button>
+    </div>
+    <div class="alerts" id="alerts"><p class="empty">No ringing yet. Start the mic and slowly raise the gain until a tone starts to ring.</p></div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <h2 style="flex:1 1 auto">Notch filters</h2>
+      <button id="clrNotch" class="small">Remove all</button>
+    </div>
+    <div class="notches" id="notches"></div>
+    <p class="note">Narrow cuts (about 1/16 octave) placed exactly on the ringing frequency. Tap a notch to make it 3 dB deeper; tap × to remove it.</p>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <h2 style="flex:1 1 auto">31-band graphic EQ · ±15 dB</h2>
+    <button id="flatBtn" class="small">Flat EQ</button>
+  </div>
+  <div class="stripwrap"><div class="strip" id="strip"></div></div>
+  <p class="note">Swipe sideways to see all bands. Tap a number to reset that band to 0. Bands with recent feedback turn red.</p>
+</div>
+
+<div class="panel">
+  <h2>Settings</h2>
+  <div class="row">
+    <label class="ctl" for="hpf">Low cut
+      <select id="hpf">
+        <option value="0">Off</option><option value="40">40 Hz</option><option value="60">60 Hz</option>
+        <option value="80">80 Hz</option><option value="100">100 Hz</option><option value="120">120 Hz</option><option value="150">150 Hz</option>
+      </select>
+    </label>
+    <label class="ctl" for="sens">Detection
+      <select id="sens">
+        <option value="24">Low (fewer false alarms)</option>
+        <option value="18">Medium</option>
+        <option value="12">High (catches early rings)</option>
+      </select>
+    </label>
+  </div>
+  <label class="ctl" for="outGain">Output <input type="range" class="h" id="outGain" min="-24" max="12" step="0.5" value="0"><span class="mono" id="outTxt">0.0 dB</span></label>
+</div>
+
+<div class="panel">
+  <h2>How to ring out a mic</h2>
+  <ol>
+    <li>Set up the mic and speakers where they will be used. Put the phone near the mic position.</li>
+    <li>Tap <b>Start mic</b>. Slowly raise the mixer gain until a tone starts to ring.</li>
+    <li>The ringing frequency shows up in red. Tap <b>Notch</b> (narrow cut) or <b>Cut band −3</b> (graphic EQ).</li>
+    <li>Raise the gain a little more and repeat. Stop after 4–6 notches, then back the gain off 3 dB for safety.</li>
+  </ol>
+  <p class="note"><b>Monitor out</b> sends the processed mic to the phone's output (speaker, headphones or a cable to your amp). Android adds some delay, so the best use is often: find the frequencies here, then cut them on your mixer's EQ. Use Auto-notch only while ringing out, not during music, because sustained notes can look like feedback.</p>
+</div>
+
+</div>
+
+<script>
+(() => {
+const FREQS=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
+const lab=f=>f>=1000?(f/1000)+'k':String(f);
+const fmtHz=f=>f>=1000?(f/1000).toFixed(f>=10000?1:2)+' kHz':Math.round(f)+' Hz';
+const dbToLin=d=>Math.pow(10,d/20);
+const $=id=>document.getElementById(id);
+
+const state={gains:Array(31).fill(0),notches:[],hpf:80,out:0,sens:18,auto:false,monitor:false};
+try{const s=JSON.parse(localStorage.getItem('ringout-eq')||'null');if(s&&Array.isArray(s.gains)&&s.gains.length===31)Object.assign(state,s,{monitor:false});}catch(e){}
+let saveT;function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem('ringout-eq',JSON.stringify(state))}catch(e){}},300)}
+
+let ctx=null,stream=null,src=null,chain=[],eqNodes=[],outNode=null,analyser=null,running=false,wake=null;
+let freqData,timeData,prefix;
+const alerts=[];const tracks=new Map();const warnBands=new Map();
+const PERSIST=24;
+
+/* ---------- filter chain ---------- */
+function buildNodes(c){
+  const list=[];
+  if(state.hpf>0){const h=c.createBiquadFilter();h.type='highpass';h.frequency.value=state.hpf;h.Q.value=0.707;list.push(h)}
+  FREQS.forEach((f,i)=>{const b=c.createBiquadFilter();b.type='peaking';b.frequency.value=Math.min(f,c.sampleRate/2-100);b.Q.value=4.32;b.gain.value=state.gains[i];b._eq=i;list.push(b)});
+  state.notches.forEach(n=>{const b=c.createBiquadFilter();b.type='peaking';b.frequency.value=n.f;b.Q.value=n.q;b.gain.value=n.g;list.push(b)});
+  return list;
+}
+function rebuildChain(){
+  if(!ctx)return;
+  try{src.disconnect()}catch(e){}
+  chain.forEach(n=>{try{n.disconnect()}catch(e){}});
+  chain=buildNodes(ctx);eqNodes=[];chain.forEach(n=>{if(n._eq!==undefined)eqNodes[n._eq]=n});
+  let p=src;for(const n of chain){p.connect(n);p=n}p.connect(outNode);
+}
+function routeOutput(){
+  if(!ctx)return;
+  try{outNode.disconnect()}catch(e){}
+  outNode.connect(analyser);
+  if(state.monitor)outNode.connect(ctx.destination);
+}
+
+/* ---------- EQ curve (computed offline, works before the mic starts) ---------- */
+const cctx=new OfflineAudioContext(1,128,48000);
+let curvePx=null;
+function computeCurve(){
+  const W=cv.width;const fr=new Float32Array(W);
+  for(let x=0;x<W;x++)fr[x]=xToF(x,W);
+  const tot=new Float32Array(W),mag=new Float32Array(W),ph=new Float32Array(W);
+  buildNodes(cctx).forEach(n=>{n.getFrequencyResponse(fr,mag,ph);for(let x=0;x<W;x++)tot[x]+=20*Math.log10(Math.max(mag[x],1e-6))});
+  curvePx=tot;
+}
+
+/* ---------- canvas ---------- */
+const cv=$('spec'),g=cv.getContext('2d');
+const FMIN=20,FMAX=20000,LMIN=Math.log10(FMIN),LSPAN=Math.log10(FMAX)-LMIN;
+const DBMIN=-110,DBMAX=-10;
+function fToX(f,W){return(Math.log10(f)-LMIN)/LSPAN*W}
+function xToF(x,W){return Math.pow(10,LMIN+x/W*LSPAN)}
+let binRanges=null;
+function resize(){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.round(cv.clientWidth*dpr);cv.height=Math.round(cv.clientHeight*dpr);
+  binRanges=null;computeCurve();if(!running)draw();
+}
+new ResizeObserver(resize).observe(cv);
+
+function draw(){
+  const W=cv.width,H=cv.height,dpr=W/cv.clientWidth;
+  g.clearRect(0,0,W,H);
+  g.font=`${11*dpr}px "JetBrains Mono",monospace`;g.textBaseline='bottom';
+  // grid
+  g.strokeStyle='#232b36';g.fillStyle='#6f7c8b';g.lineWidth=1;
+  [50,100,200,500,1000,2000,5000,10000].forEach(f=>{const x=Math.round(fToX(f,W))+.5;g.beginPath();g.moveTo(x,0);g.lineTo(x,H);g.stroke();g.fillText(lab(f),x+3*dpr,H-3*dpr)});
+  for(let d=-100;d<=-20;d+=20){const y=Math.round((DBMAX-d)/(DBMAX-DBMIN)*H)+.5;g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke();g.fillText(d+'',3*dpr,y-2*dpr)}
+  // spectrum
+  if(running&&freqData){
+    const binHz=ctx.sampleRate/analyser.fftSize,N=freqData.length;
+    if(!binRanges||binRanges.length!==W*2){binRanges=new Int32Array(W*2);for(let x=0;x<W;x++){let a=Math.floor(xToF(x,W)/binHz),b=Math.floor(xToF(x+1,W)/binHz);a=Math.min(Math.max(a,1),N-1);b=Math.min(Math.max(b,a),N-1);binRanges[x*2]=a;binRanges[x*2+1]=b}}
+    g.beginPath();g.moveTo(0,H);
+    for(let x=0;x<W;x++){let m=-200;for(let k=binRanges[x*2];k<=binRanges[x*2+1];k++)if(freqData[k]>m)m=freqData[k];
+      const y=(DBMAX-Math.max(DBMIN,Math.min(DBMAX,m)))/(DBMAX-DBMIN)*H;g.lineTo(x,y)}
+    g.lineTo(W,H);g.closePath();
+    const grd=g.createLinearGradient(0,0,0,H);grd.addColorStop(0,'rgba(79,209,165,.55)');grd.addColorStop(1,'rgba(79,209,165,.05)');
+    g.fillStyle=grd;g.fill();g.strokeStyle='#4fd1a5';g.lineWidth=1.2*dpr;g.stroke();
+    // tracks building up
+    for(const t of tracks.values()){if(t.count<4)continue;const x=fToX(t.f,W);const k=Math.min(1,t.count/PERSIST);
+      g.strokeStyle=`rgba(255,90,78,${.3+.7*k})`;g.lineWidth=2*dpr;g.beginPath();g.moveTo(x,0);g.lineTo(x,H*k);g.stroke()}
+  }else{
+    g.fillStyle='#6f7c8b';g.font=`600 ${16*dpr}px "Barlow Condensed",sans-serif`;g.textBaseline='middle';g.textAlign='center';
+    g.fillText('Tap START MIC to see the live spectrum',W/2,H*0.32);g.textAlign='left';
+  }
+  // alerts
+  alerts.forEach(a=>{const x=fToX(a.f,W);g.setLineDash([4*dpr,4*dpr]);g.strokeStyle='#ff5a4e';g.lineWidth=1*dpr;g.beginPath();g.moveTo(x,0);g.lineTo(x,H);g.stroke();g.setLineDash([])});
+  // EQ curve: ±18 dB around the middle
+  if(curvePx){const mid=H/2,sc=(H*0.42)/18;
+    g.strokeStyle='rgba(242,169,59,.35)';g.lineWidth=1;g.beginPath();g.moveTo(0,mid+.5);g.lineTo(W,mid+.5);g.stroke();
+    g.strokeStyle='#f2a93b';g.lineWidth=2*dpr;g.beginPath();
+    for(let x=0;x<W;x++){const y=mid-Math.max(-18,Math.min(18,curvePx[x]))*sc;x?g.lineTo(x,y):g.moveTo(x,y)}g.stroke()}
+}
+
+/* ---------- feedback detection ---------- */
+function detect(){
+  const N=freqData.length,binHz=ctx.sampleRate/analyser.fftSize;
+  if(!prefix||prefix.length!==N+1)prefix=new Float64Array(N+1);
+  for(let i=0;i<N;i++)prefix[i+1]=prefix[i]+freqData[i];
+  const lo=Math.max(3,Math.floor(60/binHz)),hi=Math.min(N-4,Math.floor(16000/binHz));
+  const floor=-70;const cands=[];
+  for(let i=lo;i<hi;i++){
+    const v=freqData[i];
+    if(v<floor||v<freqData[i-1]||v<freqData[i+1]||v<freqData[i-2]||v<freqData[i+2])continue;
+    const w1=Math.max(1,Math.floor(i/1.26)),w2=Math.min(N-1,Math.ceil(i*1.26));
+    const e1=Math.max(w1,i-3),e2=Math.min(w2,i+3);
+    const s=(prefix[w2+1]-prefix[w1])-(prefix[e2+1]-prefix[e1]);const n=(w2-w1+1)-(e2-e1+1);
+    if(n<4)continue;
+    const prom=v-s/n;
+    if(prom>=state.sens)cands.push({i,v,prom});
+  }
+  cands.sort((a,b)=>b.prom-a.prom);
+  const seen=new Set();
+  for(const c of cands.slice(0,4)){
+    let key=null;for(const k of tracks.keys())if(Math.abs(k-c.i)<=2){key=k;break}
+    if(key===null){key=c.i;tracks.set(key,{count:0,miss:0})}
+    const t=tracks.get(key);t.count++;t.miss=0;t.prom=c.prom;
+    const a=freqData[c.i-1],b=freqData[c.i],d=freqData[c.i+1],den=a-2*b+d;
+    t.f=(c.i+(den?0.5*(a-d)/den:0))*binHz;seen.add(key);
+    if(t.count===PERSIST)onFeedback(t.f,t.prom);
+  }
+  for(const [k,t] of tracks)if(!seen.has(k)&&++t.miss>6)tracks.delete(k);
+}
+function nearestBand(f){let bi=0,bd=1e9;FREQS.forEach((b,i)=>{const d=Math.abs(Math.log2(f/b));if(d<bd){bd=d;bi=i}});return bi}
+function onFeedback(f,prom){
+  let a=alerts.find(x=>Math.abs(Math.log2(x.f/f))<1/12);
+  if(a){a.hits++;a.t=Date.now();a.f=f;a.prom=prom}else{a={f,prom,hits:1,t:Date.now()};alerts.unshift(a);if(alerts.length>8)alerts.pop()}
+  alerts.sort((x,y)=>y.t-x.t);
+  warnBands.set(nearestBand(f),Date.now());
+  try{navigator.vibrate&&navigator.vibrate(60)}catch(e){}
+  if(state.auto)addNotch(f);
+  renderAlerts();renderWarn();
+}
+
+/* ---------- actions ---------- */
+function addNotch(f){
+  const ex=state.notches.find(n=>Math.abs(Math.log2(n.f/f))<1/24);
+  if(ex){ex.g=Math.max(ex.g-3,-24)}
+  else{if(state.notches.length>=12){msg('All 12 notch filters are in use. Remove one or use the graphic EQ.');return}
+    state.notches.push({f:Math.round(f*10)/10,q:16,g:-9});state.notches.sort((a,b)=>a.f-b.f)}
+  changed(true);renderNotches();
+}
+function cutBand(f){const i=nearestBand(f);setGain(i,Math.max(-15,state.gains[i]-3))}
+function setGain(i,v){
+  state.gains[i]=v;const inp=$('b'+i);if(inp)inp.value=v;
+  if(eqNodes[i])eqNodes[i].gain.setTargetAtTime(v,ctx.currentTime,0.01);
+  renderBandVal(i);changed(false);
+}
+function changed(rebuild){if(rebuild)rebuildChain();computeCurve();if(!running)draw();save()}
+function msg(t){$('msg').textContent=t}
+
+/* ---------- UI render ---------- */
+const strip=$('strip');
+strip.innerHTML=FREQS.map((f,i)=>`<div class="band" id="band${i}"><output id="v${i}" data-i="${i}" title="Tap to reset">0</output><input type="range" class="fader" id="b${i}" data-i="${i}" min="-15" max="15" step="0.5" value="${state.gains[i]}" aria-label="${lab(f)} hertz band"><span class="hz">${lab(f)}</span></div>`).join('');
+function renderBandVal(i){const o=$('v'+i),v=state.gains[i];o.textContent=(v>0?'+':'')+(v%1?v.toFixed(1):v);o.className=v<0?'cut':v>0?'boost':''}
+FREQS.forEach((_,i)=>renderBandVal(i));
+strip.addEventListener('input',e=>{const i=e.target.dataset.i;if(i!==undefined)setGain(+i,+e.target.value)});
+strip.addEventListener('click',e=>{if(e.target.tagName==='OUTPUT')setGain(+e.target.dataset.i,0)});
+function renderWarn(){const now=Date.now();FREQS.forEach((_,i)=>{const t=warnBands.get(i);$('band'+i).classList.toggle('warn',!!t&&now-t<60000)})}
+setInterval(renderWarn,5000);
+
+function renderAlerts(){
+  const el=$('alerts');
+  if(!alerts.length){el.innerHTML='<p class="empty">No ringing yet. Start the mic and slowly raise the gain until a tone starts to ring.</p>';return}
+  el.innerHTML=alerts.map((a,k)=>`<div class="alert"><b>${fmtHz(a.f)}</b><span class="meta">near ${lab(FREQS[nearestBand(a.f)])} band · ${a.hits}× · +${a.prom.toFixed(0)} dB</span><button class="small" data-act="notch" data-k="${k}">Notch</button><button class="small" data-act="cut" data-k="${k}">Cut band −3</button></div>`).join('');
+}
+$('alerts').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const a=alerts[+b.dataset.k];if(!a)return;
+  if(b.dataset.act==='notch'){addNotch(a.f);msg(`Notch set at ${fmtHz(a.f)}.`)}else{cutBand(a.f);msg(`${lab(FREQS[nearestBand(a.f)])} band lowered 3 dB.`)}});
+$('clrAlerts').onclick=()=>{alerts.length=0;warnBands.clear();renderAlerts();renderWarn();if(!running)draw()};
+
+function renderNotches(){
+  const el=$('notches');
+  if(!state.notches.length){el.innerHTML='<span class="empty">No notches yet.</span>';return}
+  el.innerHTML=state.notches.map((n,k)=>`<span class="chip"><span data-deep="${k}" style="cursor:pointer" title="Tap to cut 3 dB deeper">${fmtHz(n.f)} ${n.g} dB</span><button data-del="${k}" aria-label="Remove notch at ${fmtHz(n.f)}">×</button></span>`).join('');
+}
+$('notches').addEventListener('click',e=>{const d=e.target.dataset;
+  if(d.del!==undefined){state.notches.splice(+d.del,1);changed(true);renderNotches()}
+  else if(d.deep!==undefined){const n=state.notches[+d.deep];n.g=Math.max(-24,n.g-3);changed(true);renderNotches()}});
+$('clrNotch').onclick=()=>{state.notches=[];changed(true);renderNotches()};
+$('flatBtn').onclick=()=>{FREQS.forEach((_,i)=>setGain(i,0))};
+
+$('hpf').value=String(state.hpf);$('hpf').onchange=e=>{state.hpf=+e.target.value;changed(true)};
+$('sens').value=String(state.sens);$('sens').onchange=e=>{state.sens=+e.target.value;save()};
+$('outGain').value=state.out;$('outTxt').textContent=state.out.toFixed(1)+' dB';
+$('outGain').oninput=e=>{state.out=+e.target.value;$('outTxt').textContent=state.out.toFixed(1)+' dB';if(outNode)outNode.gain.setTargetAtTime(dbToLin(state.out),ctx.currentTime,0.02);save()};
+const autoBtn=$('autoBtn');autoBtn.setAttribute('aria-pressed',state.auto);
+autoBtn.onclick=()=>{state.auto=!state.auto;autoBtn.setAttribute('aria-pressed',state.auto);save()};
+const monBtn=$('monBtn');
+monBtn.onclick=()=>{state.monitor=!state.monitor;monBtn.setAttribute('aria-pressed',state.monitor);routeOutput();
+  msg(state.monitor?'Monitor is on: the processed mic now plays from the phone output. Keep the phone speaker away from the mic.':'Monitor is off: the app only listens and analyzes.')};
+
+/* ---------- start / stop ---------- */
+const startBtn=$('startBtn');
+startBtn.onclick=()=>running?stop():start();
+async function start(){
+  msg('');
+  if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    msg('This phone's WebView can't reach the microphone. Update Android System WebView from the Play Store and try again.');return}
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}
+  catch(e){msg('Microphone access was blocked. Allow the microphone for Ring Out EQ in Android Settings › Apps › Ring Out EQ › Permissions, then tap Start mic again.');return}
+  ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
+  if(ctx.state==='suspended')await ctx.resume();
+  src=ctx.createMediaStreamSource(stream);
+  outNode=ctx.createGain();outNode.gain.value=dbToLin(state.out);
+  analyser=ctx.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=0.55;analyser.minDecibels=-120;analyser.maxDecibels=0;
+  freqData=new Float32Array(analyser.frequencyBinCount);timeData=new Float32Array(analyser.fftSize);
+  rebuildChain();routeOutput();
+  running=true;binRanges=null;startBtn.textContent='Stop';startBtn.classList.add('on');
+  try{wake=await navigator.wakeLock.request('screen')}catch(e){}
+  loop();
+}
+function stop(){
+  running=false;try{stream.getTracks().forEach(t=>t.stop())}catch(e){}
+  try{ctx.close()}catch(e){}ctx=null;chain=[];eqNodes=[];tracks.clear();
+  try{wake&&wake.release()}catch(e){}wake=null;
+  startBtn.textContent='Start mic';startBtn.classList.remove('on');
+  $('peakTxt').textContent='Mic off';$('meter').style.width='0';$('lvlTxt').textContent='-∞ dB';draw();
+}
+function loop(){
+  if(!running)return;
+  analyser.getFloatFrequencyData(freqData);analyser.getFloatTimeDomainData(timeData);
+  let pk=0;for(let i=0;i<timeData.length;i++){const a=Math.abs(timeData[i]);if(a>pk)pk=a}
+  const pdb=pk>0?20*Math.log10(pk):-120;
+  $('meter').style.width=Math.max(0,Math.min(100,(pdb+60)/60*100))+'%';$('lvlTxt').textContent=(pdb<-90?'-∞':pdb.toFixed(1))+' dB';
+  // loudest peak readout
+  const binHz=ctx.sampleRate/analyser.fftSize;let mi=1,mv=-200;for(let i=Math.floor(40/binHz);i<freqData.length-1;i++)if(freqData[i]>mv){mv=freqData[i];mi=i}
+  $('peakTxt').textContent='Loudest '+fmtHz(mi*binHz);
+  detect();draw();
+  requestAnimationFrame(loop);
+}
+document.addEventListener('visibilitychange',async()=>{if(running&&document.visibilityState==='visible'){try{wake=await navigator.wakeLock.request('screen')}catch(e){}}});
+
+renderAlerts();renderNotches();
+})();
+</script>
+</body>
+</html>

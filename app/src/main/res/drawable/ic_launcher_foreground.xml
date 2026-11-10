@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- EQ faders with one pulled-down (notched) band, drawn inside the adaptive-icon safe zone -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- fader tracks -->
+    <path android:fillColor="#3A4555" android:pathData="M35,34h2v40h-2z M45,34h2v40h-2z M55,34h2v40h-2z M65,34h2v40h-2z M75,34h2v40h-2z" />
+    <!-- fader caps -->
+    <path android:fillColor="#F2A93B" android:pathData="M31,46h10v5h-10z M41,40h10v5h-10z M61,42h10v5h-10z M71,48h10v5h-10z" />
+    <!-- the notched band -->
+    <path android:fillColor="#FF5A4E" android:pathData="M51,64h10v5h-10z" />
+</vector>
