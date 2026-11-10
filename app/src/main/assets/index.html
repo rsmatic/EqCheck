@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: one-column stage console — live spectrum on top, feedback alerts, then a 31-band fader strip that scrolls sideways */
+/* Layout: one-column stage console — live spectrum on top, feedback alerts, then a 31-band fader grid that always shows every band */
 :root{
   --bg:#12161d; --panel:#1a2029; --raise:#222a35; --line:#2c3644;
   --fg:#e2e8ef; --dim:#8a97a6;
@@ -52,14 +52,17 @@ canvas{display:block;width:100%;height:230px;border-radius:6px;background:#0d101
 .notches{display:flex;gap:6px;flex-wrap:wrap}
 .chip{display:flex;align-items:center;gap:6px;background:var(--raise);border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 12px;font:13px var(--mono)}
 .chip button{min-height:28px;padding:0 9px;border-radius:999px;font-size:15px}
-.stripwrap{overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:6px}
-.strip{display:flex;gap:2px;width:max-content}
-.band{display:flex;flex-direction:column;align-items:center;gap:4px;width:36px;padding:4px 0;border-radius:6px}
+/* All 31 bands always on screen: one row of 31 on wide screens / landscape, two rows (16 + 15) in portrait */
+.stripwrap{padding-bottom:6px}
+.strip{display:grid;grid-template-columns:repeat(31,minmax(0,1fr));gap:8px 2px}
+.band{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;padding:4px 0;border-radius:6px}
 .band.warn{background:#3a1c1c}
-.band output{font:11px var(--mono);color:var(--dim);background:none;border:0;min-height:0;padding:2px 0;width:100%;text-align:center;cursor:pointer}
+.band output{font:600 10px var(--display);color:var(--dim);background:none;border:0;min-height:0;padding:2px 0;width:100%;text-align:center;cursor:pointer;white-space:nowrap;overflow:visible}
 .band output.cut{color:var(--hot)} .band output.boost{color:var(--accent)}
-.fader{writing-mode:vertical-lr;direction:rtl;width:30px;height:200px;margin:0;accent-color:var(--accent);cursor:pointer}
-.hz{font:600 12px var(--display);color:var(--fg)}
+.fader{writing-mode:vertical-lr;direction:rtl;width:100%;max-width:30px;height:200px;margin:0;accent-color:var(--accent);cursor:pointer}
+.hz{font:600 10px var(--display);color:var(--fg);white-space:nowrap;letter-spacing:-.02em}
+@media (max-width:759px){.strip{grid-template-columns:repeat(16,minmax(0,1fr))}.fader{height:160px}}
+@media (min-width:1100px){.band output{font-size:12px}.hz{font-size:12px}}
 .band.warn .hz{color:var(--hot)}
 label.ctl{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--dim)}
 input[type=range].h{flex:1 1 140px;accent-color:var(--accent);min-width:120px}
@@ -118,7 +121,7 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-si
     <button id="flatBtn" class="small">Flat EQ</button>
   </div>
   <div class="stripwrap"><div class="strip" id="strip"></div></div>
-  <p class="note">Swipe sideways to see all bands. Tap a number to reset that band to 0. Bands with recent feedback turn red.</p>
+  <p class="note">All 31 bands, 20 Hz to 20 kHz. Turn the phone sideways for one row with more room. Tap a number to reset that band to 0. Bands with recent feedback turn red.</p>
 </div>
 
 <div class="panel">
