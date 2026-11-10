@@ -52,16 +52,22 @@ canvas{display:block;width:100%;height:230px;border-radius:6px;background:#0d101
 .notches{display:flex;gap:6px;flex-wrap:wrap}
 .chip{display:flex;align-items:center;gap:6px;background:var(--raise);border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 12px;font:13px var(--mono)}
 .chip button{min-height:28px;padding:0 9px;border-radius:999px;font-size:15px}
-/* All 31 bands always on screen: one row of 31 on wide screens / landscape, two rows (16 + 15) in portrait */
+/* All 31 bands always on screen, split into LOW / MID / HIGH groups:
+   side by side on wide screens / landscape, stacked (one group per row, 11 columns so faders line up) in portrait */
 .stripwrap{padding-bottom:6px}
-.strip{display:grid;grid-template-columns:repeat(31,minmax(0,1fr));gap:8px 2px}
+.strip{display:grid;grid-template-columns:11fr 10fr 10fr;gap:10px 8px}
+.grp{min-width:0;border-top:3px solid var(--gc);padding-top:6px}
+.grp h3{margin:0 0 4px;font:700 13px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--gc);white-space:nowrap}
+.grp h3 small{font-weight:600;letter-spacing:.02em;color:var(--dim);text-transform:none;margin-left:6px}
+.grp.low{--gc:#5aa9e6} .grp.mid{--gc:#4fd1a5} .grp.high{--gc:#c58af9}
+.gbands{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:2px}
 .band{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;padding:4px 0;border-radius:6px}
 .band.warn{background:#3a1c1c}
 .band output{font:600 10px var(--display);color:var(--dim);background:none;border:0;min-height:0;padding:2px 0;width:100%;text-align:center;cursor:pointer;white-space:nowrap;overflow:visible}
 .band output.cut{color:var(--hot)} .band output.boost{color:var(--accent)}
 .fader{writing-mode:vertical-lr;direction:rtl;width:100%;max-width:30px;height:200px;margin:0;accent-color:var(--accent);cursor:pointer}
 .hz{font:600 10px var(--display);color:var(--fg);white-space:nowrap;letter-spacing:-.02em}
-@media (max-width:759px){.strip{grid-template-columns:repeat(16,minmax(0,1fr))}.fader{height:160px}}
+@media (max-width:759px){.strip{grid-template-columns:1fr}.gbands{grid-template-columns:repeat(11,minmax(0,1fr))}.fader{height:150px}.band output,.hz{font-size:11px}}
 @media (min-width:1100px){.band output{font-size:12px}.hz{font-size:12px}}
 .band.warn .hz{color:var(--hot)}
 label.ctl{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--dim)}
@@ -130,7 +136,7 @@ body.specfull canvas{flex:1 1 auto;height:auto;min-height:0}
     <button id="flatBtn" class="small">Flat EQ</button>
   </div>
   <div class="stripwrap"><div class="strip" id="strip"></div></div>
-  <p class="note">All 31 bands, 20 Hz to 20 kHz. Turn the phone sideways for one row with more room. Tap a number to reset that band to 0. Bands with recent feedback turn red.</p>
+  <p class="note">All 31 bands, 20 Hz to 20 kHz, in Low / Mid / High groups. Turn the phone sideways to see the three groups side by side. Tap a number to reset that band to 0. Bands with recent feedback turn red.</p>
 </div>
 
 <div class="panel">
@@ -323,7 +329,10 @@ function msg(t){$('msg').textContent=t}
 
 /* ---------- UI render ---------- */
 const strip=$('strip');
-strip.innerHTML=FREQS.map((f,i)=>`<div class="band" id="band${i}"><output id="v${i}" data-i="${i}" title="Tap to reset">0</output><input type="range" class="fader" id="b${i}" data-i="${i}" min="-15" max="15" step="0.5" value="${state.gains[i]}" aria-label="${lab(f)} hertz band"><span class="hz">${lab(f)}</span></div>`).join('');
+const bandHtml=(f,i)=>`<div class="band" id="band${i}"><output id="v${i}" data-i="${i}" title="Tap to reset">0</output><input type="range" class="fader" id="b${i}" data-i="${i}" min="-15" max="15" step="0.5" value="${state.gains[i]}" aria-label="${lab(f)} hertz band"><span class="hz">${lab(f)}</span></div>`;
+const hzName=f=>f>=1000?(f/1000)+' kHz':f+' Hz';
+const GROUPS=[{cls:'low',name:'Low',from:0,to:10},{cls:'mid',name:'Mid',from:11,to:20},{cls:'high',name:'High',from:21,to:30}];
+strip.innerHTML=GROUPS.map(gp=>`<section class="grp ${gp.cls}" aria-label="${gp.name} bands"><h3>${gp.name}<small>${hzName(FREQS[gp.from])} – ${hzName(FREQS[gp.to])}</small></h3><div class="gbands" style="--n:${gp.to-gp.from+1}">${FREQS.slice(gp.from,gp.to+1).map((f,k)=>bandHtml(f,gp.from+k)).join('')}</div></section>`).join('');
 function renderBandVal(i){const o=$('v'+i),v=state.gains[i];o.textContent=(v>0?'+':'')+(v%1?v.toFixed(1):v);o.className=v<0?'cut':v>0?'boost':''}
 FREQS.forEach((_,i)=>renderBandVal(i));
 strip.addEventListener('input',e=>{const i=e.target.dataset.i;if(i!==undefined)setGain(+i,+e.target.value)});
